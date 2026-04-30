@@ -37,43 +37,65 @@ flowchart LR
 
 ## Component Breakdown
 
-### 1) Data Ingestion
+
+### 1.Infastructure & Environment
+- **1.1 Wine Setup**: Configure Wine prefix and install MT5 terminal on Linux.
+- **1.2 Python Environment**: Setup virtual environment, install dependencies (`fastapi`, `sqlalchemy`, `vectorbt`, `zmq`).
+- **1.3 Version Control**: Initialize Git repository and project folder structure.
+
+ 
+### 2.Data Ingestion / Data Ingestion Layer
 
 - Connect to MT5 through `mt5linux` (`main.py`, `start_wine.sh`).
 - Pull symbol/market/account information and normalize it.
 - Persist normalized records for API and strategy consumption.
 - Add retries/health checks around broker connectivity.
+- **2.1 MQL5 EA**: Build the "Data Pusher" EA to send ticks and execution events via ZMQ/Sockets.
+- **2.2 Python Listener**: Build a robust service to receive and validate MQL5 JSON messages.
+- **2.3 Data Forwarder**: Implement logic to push validated data to the FastAPI backend.
 
-### 2) Backend API
+
+### 3.Backend API
 
 - FastAPI application entrypoint in `app/main.py`.
 - Route modules in `app/api/` (`health`, `trade`, `signal`).
 - Runtime served through `run.py` (Uvicorn).
 - Exposes read/write endpoints for trades, signals, and operational health.
+- **3.1 Database**: Implement SQLAlchemy models and initialize SQLite database.
+- **3.2 FastAPI Core**: Develop REST endpoints for strategies, trades, and signals.
+- **3.3 WebSockets**: Implement real-time broadcasting for ticks and signal alerts.
 
-### 3) Database Layer
+### 4.Database Layer
 
 - SQLAlchemy engine/session setup in `app/db/session.py`.
 - Declarative models in `app/models/` and schemas in `app/schemas/`.
 - MVP default is SQLite (`app/core/config.py`), with migration path to PostgreSQL.
 
-### 4) Strategy Engine
+### 5.Strategy Engine
 
 - Strategy abstraction seeded in `strategies/base.py`.
 - Consumes ingested market data and emits signals/trade intents.
 - Strategy execution pipeline should be deterministic and testable.
+- **4.1 Logic Implementation**: Develop core strategy classes and signal generation rules.
+- **4.2 Backtesting**: Integrate `vectorbt` for performance analysis on historical data.
+- **4.3 Risk Control**: Implement global risk rules (max drawdown, lot size limits).
 
-### 5) Dashboard
+
+### 6. Dashboard
 
 - Streamlit UI in `dashboard/app.py`.
 - MVP dashboard focuses on service health, basic trade/signal visibility, and system status.
 - Pulls data from backend API (no direct database coupling from UI).
+- **5.1 Streamlit Admin**: Build a real-time monitor for internal system health and manual control.
+- **5.2 React Frontend**: (Optional) Initialize React boilerplate for external trade visualization.1. Infrastr
 
-### 6) Cross-Cutting Operations
+### 7. Cross-Cutting Operations
 
 - Health checks via `/health` and tests in `tests/test_health.py`.
 - Centralized config in `app/core/config.py`.
 - Logging scaffolding in `app/core/logging.py` for observability hardening.
+
+
 
 ## Technology Stack
 
@@ -109,40 +131,4 @@ The first release explicitly does **not** include:
 - Auto-scaling distributed workers and production-grade orchestration.
 - Native mobile applications.
 
-## Milestones
-
-The project milestones are mapped to Continuum work items where available:
-
-1. **M0 - Architecture Alignment (Current)**
-   - Task `#878`: Draft project vision, architecture, and roadmap document.
-   - Deliverable: this `docs/project_plan.md`.
-
-2. **M1 - Core Service Skeleton**
-   - Extend existing FastAPI routes and DB models into usable CRUD/API contracts.
-   - Harden config/loading and baseline logging.
-   - Planned Continuum tasks: **to be linked once added to project 33 task list**.
-
-3. **M2 - Ingestion Pipeline MVP**
-   - Move MT5 prototype code into a reusable ingestion module/service.
-   - Persist normalized ingestion outputs and add failure handling.
-   - Planned Continuum tasks: **to be linked once added to project 33 task list**.
-
-4. **M3 - Strategy Loop MVP**
-   - Implement minimal strategy execution path on top of ingested data.
-   - Expose strategy outputs through API and persist signals.
-   - Planned Continuum tasks: **to be linked once added to project 33 task list**.
-
-5. **M4 - Dashboard MVP**
-   - Expand Streamlit app to display health, signals, and trade snapshots.
-   - Integrate with backend API endpoints.
-   - Planned Continuum tasks: **to be linked once added to project 33 task list**.
-
-6. **M5 - Stabilization and Release Readiness**
-   - Add smoke/integration tests for ingestion -> strategy -> API -> dashboard path.
-   - Finalize MVP release checklist and operational runbook.
-   - Planned Continuum tasks: **to be linked once added to project 33 task list**.
-
-## Review Notes
-
-- Reviewer feedback section (required by checklist) should be completed after peer review.
-- Suggested review focus: architecture boundaries, MVP scope realism, and milestone sequencing.
+#

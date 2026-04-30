@@ -4,9 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-
-
-
 def get_symbols(m):
     
     symbols=m.symbols_total()
@@ -16,10 +13,6 @@ def get_symbols(m):
     else:
         print("symbols not found")
  
-
-
-
-
 try:
     # attempt to create an instance
     mt5 = MetaTrader5()
