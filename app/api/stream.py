@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket
 import asyncio
 from services.mt5_service import get_mt5
+from services.state import state
 
 router = APIRouter()
 
@@ -16,57 +17,65 @@ async def market(ws: WebSocket):
             mt5 = get_mt5()
 
             if mt5 is None:
-                await ws.send_json({
-                    "type": "error",
-                    "message": "MT5 not connected"
-                })
+                await ws.send_json({"type": "error", "message": "MT5 not connected"})
                 await asyncio.sleep(2)
                 continue
 
-            # ensure symbol
             mt5.symbol_select(symbol, True)
 
             tick = mt5.symbol_info_tick(symbol)
             account = mt5.account_info()
             positions = mt5.positions_get()
 
-            # ───── PRICE ─────
+            # ───── PRICE (only if changed) ─────
             if tick:
-                await ws.send_json({
-                    "type": "price",
-                    "data": {
-                        "symbol": symbol,
-                        "bid": tick.bid,
-                        "ask": tick.ask,
-                    }
-                })
+                new_price = {
+                    "symbol": symbol,
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                }
 
-            # ───── ACCOUNT ─────
+                if state["price"] != new_price:
+                    state["price"] = new_price
+                    await ws.send_json({
+                        "type": "price",
+                        "data": new_price
+                    })
+
+            # ───── ACCOUNT (only if changed) ─────
             if account:
-                await ws.send_json({
-                    "type": "account",
-                    "data": {
-                        "balance": account.balance,
-                        "equity": account.equity,
-                        "profit": account.profit,
-                    }
-                })
+                new_account = {
+                    "balance": account.balance,
+                    "equity": account.equity,
+                    "profit": account.profit,
+                }
 
-            # ───── POSITIONS ─────
+                if state["account"] != new_account:
+                    state["account"] = new_account
+                    await ws.send_json({
+                        "type": "account",
+                        "data": new_account
+                    })
+
+            # ───── POSITIONS (only if changed) ─────
             if positions:
-                await ws.send_json({
-                    "type": "positions",
-                    "data": [
-                        {
-                            "ticket": p.ticket,
-                            "symbol": p.symbol,
-                            "type": "BUY" if p.type == 0 else "SELL",
-                            "volume": p.volume,
-                            "profit": p.profit,
-                        }
-                        for p in positions
-                    ]
-                })
+                new_positions = [
+                    {
+                        "ticket": p.ticket,
+                        "symbol": p.symbol,
+                        "type": "BUY" if p.type == 0 else "SELL",
+                        "volume": p.volume,
+                        "profit": p.profit,
+                    }
+                    for p in positions
+                ]
+
+                if state["positions"] != new_positions:
+                    state["positions"] = new_positions
+                    await ws.send_json({
+                        "type": "positions",
+                        "data": new_positions
+                    })
 
         except Exception as e:
             await ws.send_json({
@@ -74,4 +83,4 @@ async def market(ws: WebSocket):
                 "message": str(e)
             })
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)  # faster loop but smarter output
