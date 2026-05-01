@@ -16,32 +16,62 @@ async def market(ws: WebSocket):
             mt5 = get_mt5()
 
             if mt5 is None:
-                await ws.send_json({"error": "MT5 not connected"})
+                await ws.send_json({
+                    "type": "error",
+                    "message": "MT5 not connected"
+                })
                 await asyncio.sleep(2)
                 continue
 
-            # ⚠️ DO NOT assume symbol_select always works
-            try:
-                mt5.symbol_select(symbol, True)
-            except Exception as e:
-                await ws.send_json({"error": f"symbol_select failed: {str(e)}"})
-                await asyncio.sleep(2)
-                continue
+            # ensure symbol
+            mt5.symbol_select(symbol, True)
 
             tick = mt5.symbol_info_tick(symbol)
+            account = mt5.account_info()
+            positions = mt5.positions_get()
 
-            if tick is None:
-                await ws.send_json({"error": "No tick data"})
-            else:
+            # ───── PRICE ─────
+            if tick:
                 await ws.send_json({
-                    "symbol": symbol,
-                    "bid": tick.bid,
-                    "ask": tick.ask,
+                    "type": "price",
+                    "data": {
+                        "symbol": symbol,
+                        "bid": tick.bid,
+                        "ask": tick.ask,
+                    }
+                })
+
+            # ───── ACCOUNT ─────
+            if account:
+                await ws.send_json({
+                    "type": "account",
+                    "data": {
+                        "balance": account.balance,
+                        "equity": account.equity,
+                        "profit": account.profit,
+                    }
+                })
+
+            # ───── POSITIONS ─────
+            if positions:
+                await ws.send_json({
+                    "type": "positions",
+                    "data": [
+                        {
+                            "ticket": p.ticket,
+                            "symbol": p.symbol,
+                            "type": "BUY" if p.type == 0 else "SELL",
+                            "volume": p.volume,
+                            "profit": p.profit,
+                        }
+                        for p in positions
+                    ]
                 })
 
         except Exception as e:
-            # 🔥 THIS prevents silent crash = your issue
-            print("[WS ERROR]", e)
-            await ws.send_json({"error": str(e)})
+            await ws.send_json({
+                "type": "error",
+                "message": str(e)
+            })
 
         await asyncio.sleep(1)
