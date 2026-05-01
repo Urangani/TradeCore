@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 class TradeEvent(BaseModel):
-    strategy_id: str
+    strategy_id: int
     symbol: str
     action: str
     type: str
