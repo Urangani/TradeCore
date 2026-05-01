@@ -1,11 +1,18 @@
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, Field
+from typing import Literal
 
-class TradeEvent(BaseModel):
-    strategy_id: str
+
+class OpenTradeRequest(BaseModel):
     symbol: str
-    action: str
-    type: str
-    price: float
-    volume: float
-    timestamp: datetime
+    lot: float = Field(gt=0)
+    order_type: Literal["BUY", "SELL"]
+
+
+class CloseTradeRequest(BaseModel):
+    ticket: int
+
+
+class TradeResponse(BaseModel):
+    status: str
+    message: str | None = None
+    data: dict | None = None

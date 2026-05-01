@@ -1,42 +1,75 @@
 import mt5linux
 import time
 
-def get_mt5(max_attempts=10, delay=2):
-    """
-    Try to connect to the MT5Linux bridge with retries.
-    max_attempts: number of times to retry before giving up
-    delay: seconds to wait between attempts
-    """
+
+mt5 = None
+
+
+def connect(max_attempts=5, delay=1):
+    global mt5
+
     for attempt in range(1, max_attempts + 1):
         try:
-            return mt5linux.MetaTrader5()
-        except ConnectionRefusedError:
-            print(f"[WARN] MT5 bridge not available (attempt {attempt}/{max_attempts})")
-            time.sleep(delay)
-    print("[ERROR] Could not connect to MT5 bridge after retries.")
+            mt5 = mt5linux.MetaTrader5()
+            if mt5.initialize():
+                print("[INFO] MT5 connected")
+                return mt5
+        except Exception as e:
+            print(f"[WARN] Connection failed ({attempt}): {e}")
+
+        time.sleep(delay)
+
+    print("[ERROR] Could not connect to MT5")
+    mt5 = None
     return None
 
 
-# Example usage
-mt5 = get_mt5()
+def get_mt5():
+    global mt5
+
+    # reconnect if lost
+    if mt5 is None:
+        return connect()
+
+    return mt5
+
+
+
 
 def init():
-    if mt5 is None:
-        raise Exception("MT5Linux bridge not available")
-    if not mt5.initialize():
-        raise Exception("MT5Linux connection failed")
-    print(mt5.account_info())
+    mt5 = connect()
+
+    if mt5:
+        print("[STARTUP] MT5 connected")
+        info = mt5.account_info()
+        if info:
+            print(f"[ACCOUNT] Balance: {info.balance}")
+    else:
+        print("[STARTUP WARNING] MT5 not available at startup")
+
+
 
 def shutdown():
+    global mt5
+
     if mt5:
-        mt5.shutdown()
+        try:
+            mt5.shutdown()
+            print("[SHUTDOWN] MT5 connection closed")
+        except Exception as e:
+            print(f"[SHUTDOWN ERROR] {e}")
+
+
 
 def get_account_info():
+    mt5 = get_mt5()
     if mt5 is None:
-        return None
+        return {"error": "MT5 not connected"}
+
     info = mt5.account_info()
     if info is None:
-        return None
+        return {"error": "Failed to fetch account info"}
+
     return {
         "balance": info.balance,
         "equity": info.equity,
@@ -44,18 +77,89 @@ def get_account_info():
         "profit": info.profit,
     }
 
+
+
 def get_open_positions():
+    mt5 = get_mt5()
     if mt5 is None:
         return []
+
     positions = mt5.positions_get()
     if positions is None:
         return []
+
     return [
         {
             "symbol": p.symbol,
             "volume": p.volume,
             "type": "BUY" if p.type == 0 else "SELL",
             "profit": p.profit,
+            "ticket": p.ticket,
         }
         for p in positions
     ]
+
+
+
+def open_trade(symbol: str, lot: float, order_type: str):
+    mt5 = get_mt5()
+    if mt5 is None:
+        return {"error": "MT5 not connected"}
+
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        return {"error": "Symbol not found"}
+
+    price = tick.ask if order_type == "BUY" else tick.bid
+
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": lot,
+        "type": mt5.ORDER_TYPE_BUY if order_type == "BUY" else mt5.ORDER_TYPE_SELL,
+        "price": price,
+        "deviation": 10,
+        "magic": 123456,
+        "comment": "app_trade",
+    }
+
+    result = mt5.order_send(request)
+
+    if result is None:
+        return {"error": mt5.last_error()}
+
+    return {"status": result.retcode}
+
+
+def close_trade(ticket: int):
+    mt5 = get_mt5()
+    if mt5 is None:
+        return {"error": "MT5 not connected"}
+
+    positions = mt5.positions_get(ticket=ticket)
+    if not positions:
+        return {"error": "Position not found"}
+
+    pos = positions[0]
+    tick = mt5.symbol_info_tick(pos.symbol)
+
+    close_type = mt5.ORDER_TYPE_SELL if pos.type == 0 else mt5.ORDER_TYPE_BUY
+    price = tick.bid if pos.type == 0 else tick.ask
+
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": pos.symbol,
+        "volume": pos.volume,
+        "type": close_type,
+        "position": pos.ticket,
+        "price": price,
+        "deviation": 10,
+        "magic": 123456,
+    }
+
+    result = mt5.order_send(request)
+
+    if result is None:
+        return {"error": mt5.last_error()}
+
+    return {"status": result.retcode}

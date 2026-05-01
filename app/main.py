@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api import account, trades, logs
+from api import account, trades, logs ,stream
 from services.mt5_service import init, shutdown
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,5 +24,6 @@ def shutdown_event():
 app.include_router(account.router)
 app.include_router(trades.router)
 app.include_router(logs.router)
+app.include_router(stream.router)  
 
 
