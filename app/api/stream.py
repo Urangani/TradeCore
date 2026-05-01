@@ -5,6 +5,7 @@ from services.state import state
 
 router = APIRouter()
 
+
 @router.websocket("/ws/market")
 async def market(ws: WebSocket):
     await ws.accept()
@@ -15,72 +16,51 @@ async def market(ws: WebSocket):
     try:
         while True:
 
-            # ─────────────────────────────
-            # 1. CONNECTION GUARD
-            # ─────────────────────────────
-            if ws.client_state.name != "CONNECTED":
-                break
-
             mt5 = get_mt5()
 
             if mt5 is None:
-                await ws.send_json({
-                    "type": "error",
-                    "message": "MT5 not connected"
-                })
-                await asyncio.sleep(2)
-                continue
+                break
 
-            # ─────────────────────────────
-            # 2. SYMBOL
-            # ─────────────────────────────
             mt5.symbol_select(symbol, True)
+
+            # PRICE
             tick = mt5.symbol_info_tick(symbol)
 
-            # ─────────────────────────────
-            # 3. PRICE STREAM
-            # ─────────────────────────────
             if tick:
-                new_price = {
+                price = {
                     "symbol": symbol,
                     "bid": tick.bid,
                     "ask": tick.ask,
                 }
 
-                if state.get("price") != new_price:
-                    state["price"] = new_price
-
+                if state["price"] != price:
+                    state["price"] = price
                     await ws.send_json({
                         "type": "price",
-                        "data": new_price
+                        "data": price
                     })
 
-            # ─────────────────────────────
-            # 4. ACCOUNT STREAM
-            # ─────────────────────────────
+            # ACCOUNT
             account = mt5.account_info()
 
             if account:
-                new_account = {
+                acc = {
                     "balance": account.balance,
                     "equity": account.equity,
                     "profit": account.profit,
                 }
 
-                if state.get("account") != new_account:
-                    state["account"] = new_account
-
+                if state["account"] != acc:
+                    state["account"] = acc
                     await ws.send_json({
                         "type": "account",
-                        "data": new_account
+                        "data": acc
                     })
 
-            # ─────────────────────────────
-            # 5. POSITIONS STREAM
-            # ─────────────────────────────
-            positions = mt5.positions_get() or []
+            # POSITIONS
+            raw_positions = mt5.positions_get() or []
 
-            new_positions = [
+            positions = [
                 {
                     "ticket": p.ticket,
                     "symbol": p.symbol,
@@ -88,15 +68,14 @@ async def market(ws: WebSocket):
                     "volume": p.volume,
                     "profit": p.profit,
                 }
-                for p in positions
+                for p in raw_positions
             ]
 
-            if state.get("positions") != new_positions:
-                state["positions"] = new_positions
-
+            if state["positions"] != positions:
+                state["positions"] = positions
                 await ws.send_json({
                     "type": "positions",
-                    "data": new_positions
+                    "data": positions
                 })
 
             await asyncio.sleep(0.5)
