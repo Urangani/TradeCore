@@ -79,15 +79,13 @@ def get_account_info():
 
 
 
-def get_open_positions():
+def get_open_positions(symbol: str = None):
     mt5 = get_mt5()
     if mt5 is None:
         return []
-
-    positions = mt5.positions_get()
+    positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
     if positions is None:
         return []
-
     return [
         {
             "symbol": p.symbol,
@@ -98,6 +96,7 @@ def get_open_positions():
         }
         for p in positions
     ]
+
 
 
 
@@ -163,3 +162,13 @@ def close_trade(ticket: int):
         return {"error": mt5.last_error()}
 
     return {"status": result.retcode}
+
+def get_symbol_price(symbol: str):
+    mt5 = get_mt5()
+    if mt5 is None:
+        return None
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        return None
+    return {"symbol": symbol, "bid": tick.bid, "ask": tick.ask, "time": tick.time}
+
