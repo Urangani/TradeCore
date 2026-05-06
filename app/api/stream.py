@@ -1,8 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
-from services.mt5_service import get_mt5
-from services.state import state
-from services.connection_manager import ConnectionManager
+from app.core import config
+from app.services.mt5_service import get_mt5
+from app.services.state import state
+from app.services.connection_manager import ConnectionManager
 
 router = APIRouter()
 manager = ConnectionManager()   # <-- instantiate here
@@ -12,7 +13,7 @@ async def market(ws: WebSocket):
     await manager.connect(ws)
     print("[WS] client connected")
 
-    symbol = "EURUSD"
+    symbol = config.STREAM_SYMBOL
 
     try:
         while True:
@@ -47,7 +48,7 @@ async def market(ws: WebSocket):
                 state["positions"] = positions
                 await manager.broadcast({"type": "positions", "data": positions})
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(config.STREAM_POLL_SECONDS)
 
     except WebSocketDisconnect:
         print("[WS] client disconnected")

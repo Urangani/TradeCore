@@ -1,5 +1,7 @@
 import mt5linux
 import time
+import os
+from app.core.logging import logger
 
 
 mt5 = None
@@ -12,14 +14,14 @@ def connect(max_attempts=5, delay=1):
         try:
             mt5 = mt5linux.MetaTrader5()
             if mt5.initialize():
-                print("[INFO] MT5 connected")
+                logger.info("MT5 connected")
                 return mt5
         except Exception as e:
-            print(f"[WARN] Connection failed ({attempt}): {e}")
+            logger.warning("MT5 connection failed (attempt %s): %s", attempt, e)
 
         time.sleep(delay)
 
-    print("[ERROR] Could not connect to MT5")
+    logger.error("Could not connect to MT5")
     mt5 = None
     return None
 
@@ -37,15 +39,18 @@ def get_mt5():
 
 
 def init():
+    if os.getenv("MT5_DISABLE", "").lower() in ("1", "true", "yes"):
+        logger.info("MT5 disabled via MT5_DISABLE")
+        return
     mt5 = connect()
 
     if mt5:
-        print("[STARTUP] MT5 connected")
+        logger.info("Startup: MT5 connected")
         info = mt5.account_info()
         if info:
-            print(f"[ACCOUNT] Balance: {info.balance}")
+            logger.info("Account balance: %s", info.balance)
     else:
-        print("[STARTUP WARNING] MT5 not available at startup")
+        logger.warning("Startup: MT5 not available")
 
 
 
@@ -55,9 +60,9 @@ def shutdown():
     if mt5:
         try:
             mt5.shutdown()
-            print("[SHUTDOWN] MT5 connection closed")
+            logger.info("MT5 connection closed")
         except Exception as e:
-            print(f"[SHUTDOWN ERROR] {e}")
+            logger.exception("MT5 shutdown error: %s", e)
 
 
 

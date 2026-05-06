@@ -1,30 +1,21 @@
-import sqlite3
-
-DB_NAME = "trading.db"
-
-
-def get_conn():
-    return sqlite3.connect(DB_NAME)
-
-
 def init_db():
-    conn = get_conn()
-    cursor = conn.cursor()
+    # Initialize (or upgrade) the database schema via SQLAlchemy.
+    # NOTE: For a serious production platform, Alembic migrations should replace create_all.
+    from app.db.session import engine
+    from app.db.base import Base
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS trades (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ticket INTEGER,
-        symbol TEXT,
-        type TEXT,
-        volume REAL,
-        open_price REAL,
-        close_price REAL,
-        profit REAL,
-        status TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    # Import models so they're registered on Base.metadata
+    from app.models.trade import Trade  # noqa: F401
+    from app.models.signal import Signal  # noqa: F401
+    from app.models.order_event import OrderEvent  # noqa: F401
+    from app.models.position import Position  # noqa: F401
+    from app.models.market_data import Tick, Candle  # noqa: F401
+    from app.models.research import MarketDataset, BacktestRun, PerformanceSnapshot  # noqa: F401
+    from app.models.strategy_telemetry import (  # noqa: F401
+        Feature,
+        StrategyDecision,
+        RiskEvent,
+        MarketContext,
     )
-    """)
 
-    conn.commit()
-    conn.close()
+    Base.metadata.create_all(bind=engine)

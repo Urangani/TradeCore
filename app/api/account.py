@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from services.mt5_service import get_mt5
+from app.services.mt5_service import get_mt5
 
 router = APIRouter()
 

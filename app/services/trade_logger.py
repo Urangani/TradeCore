@@ -1,40 +1,46 @@
-from services.db import get_conn
-
-
 def log_trade_open(ticket, symbol, type_, volume, price):
-    conn = get_conn()
-    cur = conn.cursor()
+    from app.db.session import SessionLocal
+    from app.repositories.trades import TradeCreate, TradeRepository
 
-    cur.execute("""
-        INSERT INTO trades (ticket, symbol, type, volume, open_price, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (ticket, symbol, type_, volume, price, "OPEN"))
-
-    conn.commit()
-    conn.close()
+    db = SessionLocal()
+    try:
+        repo = TradeRepository(db)
+        repo.create_open(
+            TradeCreate(
+                ticket=int(ticket),
+                symbol=symbol,
+                side=type_,
+                volume=float(volume),
+                open_price=float(price) if price is not None else None,
+            )
+        )
+    finally:
+        db.close()
 
 
 def update_trade_close(ticket, close_price, profit):
-    conn = get_conn()
-    cur = conn.cursor()
+    from app.db.session import SessionLocal
+    from app.repositories.trades import TradeRepository
 
-    cur.execute("""
-        UPDATE trades
-        SET close_price = ?, profit = ?, status = 'CLOSED'
-        WHERE ticket = ?
-    """, (close_price, profit, ticket))
-
-    conn.commit()
-    conn.close()
+    db = SessionLocal()
+    try:
+        repo = TradeRepository(db)
+        repo.mark_closed(
+            ticket=int(ticket),
+            close_price=float(close_price),
+            profit=float(profit),
+        )
+    finally:
+        db.close()
 
 
 def get_trades():
-    conn = get_conn()
-    cur = conn.cursor()
+    from app.db.session import SessionLocal
+    from app.repositories.trades import TradeRepository
 
-    cur.execute("SELECT * FROM trades ORDER BY created_at DESC")
-    rows = cur.fetchall()
-
-    conn.close()
-
-    return rows
+    db = SessionLocal()
+    try:
+        repo = TradeRepository(db)
+        return repo.list_recent()
+    finally:
+        db.close()

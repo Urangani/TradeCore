@@ -1,27 +1,27 @@
 from fastapi import APIRouter
-from services.trade_logger import get_trades
+from app.services.trade_logger import get_trades
 
 router = APIRouter()
 
 @router.get("/journal/trades")
 def journal():
-    rows = get_trades()
+    trades = get_trades()
 
     return {
         "status": "success",
         "data": [
             {
-                "id": r[0],
-                "ticket": r[1],
-                "symbol": r[2],
-                "type": r[3],
-                "volume": r[4],
-                "open_price": r[5],
-                "close_price": r[6],
-                "profit": r[7],
-                "status": r[8],
-                "created_at": r[9],
+                "id": t.id,
+                "ticket": t.ticket,
+                "symbol": t.symbol,
+                "type": t.side,
+                "volume": t.volume,
+                "open_price": t.open_price,
+                "close_price": t.close_price,
+                "profit": t.profit,
+                "status": t.status,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
             }
-            for r in rows
-        ]
+            for t in trades
+        ],
     }

@@ -1,8 +1,11 @@
 from fastapi import APIRouter
-from schemas.trade import OpenTradeRequest, CloseTradeRequest
-from services.mt5_service import get_mt5
-from services.risk_engine import validate_trade
-from services.trade_logger import log_trade_open,update_trade_close,get_trades
+from fastapi.params import Depends
+
+from app.core.logging import logger
+from app.schemas.trade import OpenTradeRequest, CloseTradeRequest
+from app.services.dependencies import get_mt5_client
+from app.services.risk_engine import validate_trade
+from app.services.trade_logger import log_trade_open, update_trade_close, get_trades
 router = APIRouter()
 
 def get_filling_mode(mt5, symbol):
@@ -34,12 +37,12 @@ def safe_result(result):
     }
 
 @router.post("/trade/open")
-def open_trade(payload: OpenTradeRequest):
-    mt5 = get_mt5()
+def open_trade(payload: OpenTradeRequest, mt5=Depends(get_mt5_client)):
+    logger.info("Open trade request: symbol=%s lot=%s side=%s", payload.symbol, payload.lot, payload.order_type)
     if mt5 is None:
         return {"status": "error", "message": "MT5 not connected"}
 
-    ok, msg = validate_trade(payload.symbol, payload.lot)
+    ok, msg = validate_trade(payload.symbol, payload.lot, mt5=mt5)
     if not ok:
         return {"status": "rejected", "message": msg}
 
@@ -72,6 +75,7 @@ def open_trade(payload: OpenTradeRequest):
         return {"status": "error", "message": str(mt5.last_error())}
 
     if result.retcode != mt5.TRADE_RETCODE_DONE:
+        logger.warning("Open trade failed: retcode=%s", result.retcode)
         return {
             "status": "error",
             "message": f"Trade failed: {result.retcode}",
@@ -96,8 +100,8 @@ def open_trade(payload: OpenTradeRequest):
 
 
 @router.post("/trade/close")
-def close_trade(payload: CloseTradeRequest):
-    mt5 = get_mt5()
+def close_trade(payload: CloseTradeRequest, mt5=Depends(get_mt5_client)):
+    logger.info("Close trade request: ticket=%s", payload.ticket)
     if mt5 is None:
         return {"status": "error", "message": "MT5 not connected"}
 
@@ -133,6 +137,7 @@ def close_trade(payload: CloseTradeRequest):
         return {"status": "error", "message": str(mt5.last_error())}
 
     if result.retcode != mt5.TRADE_RETCODE_DONE:
+        logger.warning("Close trade failed: retcode=%s ticket=%s", result.retcode, payload.ticket)
         return {
             "status": "error",
             "message": f"Close failed: {result.retcode}",
@@ -160,8 +165,7 @@ def close_trade(payload: CloseTradeRequest):
     }
 
 @router.get("/trades/open")
-def open_positions():
-    mt5 = get_mt5()
+def open_positions(mt5=Depends(get_mt5_client)):
     if mt5 is None:
         return {"status": "error", "data": []}
 
@@ -188,23 +192,24 @@ def open_positions():
 @router.get("/trades/history")
 def trade_history():
     try:
-        rows = get_trades()
-        # Convert SQLite rows into dicts
-        trades = [
-            {
-                "id": r[0],
-                "ticket": r[1],
-                "symbol": r[2],
-                "type": r[3],
-                "volume": r[4],
-                "open_price": r[5],
-                "close_price": r[6],
-                "profit": r[7],
-                "status": r[8],
-                "created_at": r[9],
-            }
-            for r in rows
-        ]
-        return {"status": "success", "data": trades}
+        trades = get_trades()
+        return {
+            "status": "success",
+            "data": [
+                {
+                    "id": t.id,
+                    "ticket": t.ticket,
+                    "symbol": t.symbol,
+                    "type": t.side,
+                    "volume": t.volume,
+                    "open_price": t.open_price,
+                    "close_price": t.close_price,
+                    "profit": t.profit,
+                    "status": t.status,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                }
+                for t in trades
+            ],
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
