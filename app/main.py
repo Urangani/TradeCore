@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api import account, trades, logs, stream, journal, health, risk, strategies, review
+from app.api import account, trades, logs, stream, journal, health, risk, strategies, review, market
 from app.services.mt5_service import init, shutdown
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.db import init_db
@@ -32,11 +32,12 @@ def shutdown_event():
 app.include_router(account.router)
 app.include_router(trades.router)
 app.include_router(logs.router)
-app.include_router(stream.router)  
+app.include_router(stream.router)
 app.include_router(journal.router)
 app.include_router(health.router)
 app.include_router(risk.router)
 app.include_router(strategies.router)
 app.include_router(review.router)
+app.include_router(market.router)
 
 

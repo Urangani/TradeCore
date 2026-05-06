@@ -6,7 +6,8 @@ from app.services.state import state
 from app.services.connection_manager import ConnectionManager
 
 router = APIRouter()
-manager = ConnectionManager()   # <-- instantiate here
+manager = ConnectionManager()
+
 
 @router.websocket("/ws/market")
 async def market(ws: WebSocket):
@@ -19,7 +20,14 @@ async def market(ws: WebSocket):
         while True:
             mt5 = get_mt5()
             if mt5 is None:
-                break
+                # Broadcast a degraded status so the UI badge can reflect it,
+                # then retry — do NOT break, which would close the socket.
+                await manager.broadcast({"type": "status", "data": {"mt5_connected": False}})
+                await asyncio.sleep(2)
+                continue
+
+            # Broadcast recovery once MT5 is back
+            await manager.broadcast({"type": "status", "data": {"mt5_connected": True}})
 
             mt5.symbol_select(symbol, True)
 
@@ -32,16 +40,31 @@ async def market(ws: WebSocket):
 
             account = mt5.account_info()
             if account:
-                acc = {"balance": account.balance, "equity": account.equity, "profit": account.profit}
+                acc = {
+                    "balance": account.balance,
+                    "equity": account.equity,
+                    "profit": account.profit,
+                    "margin": getattr(account, "margin", 0),
+                    "margin_free": getattr(account, "margin_free", 0),
+                    "margin_level": getattr(account, "margin_level", 0),
+                }
                 if state["account"] != acc:
                     state["account"] = acc
                     await manager.broadcast({"type": "account", "data": acc})
 
             raw_positions = mt5.positions_get() or []
             positions = [
-                {"ticket": p.ticket, "symbol": p.symbol,
-                 "type": "BUY" if p.type == 0 else "SELL",
-                 "volume": p.volume, "profit": p.profit}
+                {
+                    "ticket": p.ticket,
+                    "symbol": p.symbol,
+                    "type": "BUY" if p.type == 0 else "SELL",
+                    "volume": p.volume,
+                    "profit": p.profit,
+                    "open_price": getattr(p, "price_open", None),
+                    "current_price": getattr(p, "price_current", None),
+                    "sl": getattr(p, "sl", None),
+                    "tp": getattr(p, "tp", None),
+                }
                 for p in raw_positions
             ]
             if state["positions"] != positions:
