@@ -1,8 +1,8 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
-from app.core import config
+from app.core.config import config
 from app.services.mt5_service import get_mt5
-from app.services.state import state
+from app.services.state import state_cache
 from app.services.connection_manager import ConnectionManager
 
 router = APIRouter()
@@ -34,8 +34,8 @@ async def market(ws: WebSocket):
             tick = mt5.symbol_info_tick(symbol)
             if tick:
                 price = {"symbol": symbol, "bid": tick.bid, "ask": tick.ask}
-                if state["price"] != price:
-                    state["price"] = price
+                if state_cache.has_changed("price", price):
+                    state_cache.set("price", price)
                     await manager.broadcast({"type": "price", "data": price})
 
             account = mt5.account_info()
@@ -48,8 +48,8 @@ async def market(ws: WebSocket):
                     "margin_free": getattr(account, "margin_free", 0),
                     "margin_level": getattr(account, "margin_level", 0),
                 }
-                if state["account"] != acc:
-                    state["account"] = acc
+                if state_cache.has_changed("account", acc):
+                    state_cache.set("account", acc)
                     await manager.broadcast({"type": "account", "data": acc})
 
             raw_positions = mt5.positions_get() or []
@@ -67,8 +67,8 @@ async def market(ws: WebSocket):
                 }
                 for p in raw_positions
             ]
-            if state["positions"] != positions:
-                state["positions"] = positions
+            if state_cache.has_changed("positions", positions):
+                state_cache.set("positions", positions)
                 await manager.broadcast({"type": "positions", "data": positions})
 
             await asyncio.sleep(config.STREAM_POLL_SECONDS)

@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 from fastapi.params import Depends
+from sqlalchemy.orm import Session
+from app.api.dependencies import get_db, get_risk_policy
+from app.services.risk_engine import RiskPolicy
 
 from app.core.logging import logger
 from app.schemas.trade import OpenTradeRequest, CloseTradeRequest
 from app.services.dependencies import get_mt5_client
-from app.services.risk_engine import validate_trade
 from app.services.trade_logger import log_trade_open, update_trade_close, get_trades
 router = APIRouter()
 
@@ -37,12 +39,17 @@ def safe_result(result):
     }
 
 @router.post("/trade/open")
-def open_trade(payload: OpenTradeRequest, mt5=Depends(get_mt5_client)):
+def open_trade(
+    payload: OpenTradeRequest, 
+    mt5=Depends(get_mt5_client), 
+    db: Session = Depends(get_db),
+    risk_policy: RiskPolicy = Depends(get_risk_policy)
+):
     logger.info("Open trade request: symbol=%s lot=%s side=%s", payload.symbol, payload.lot, payload.order_type)
     if mt5 is None:
         return {"status": "error", "message": "MT5 not connected"}
 
-    ok, msg = validate_trade(payload.symbol, payload.lot, mt5=mt5)
+    ok, msg = risk_policy.validate_trade(payload.symbol, payload.lot)
     if not ok:
         return {"status": "rejected", "message": msg}
 
@@ -82,6 +89,7 @@ def open_trade(payload: OpenTradeRequest, mt5=Depends(get_mt5_client)):
         }
 
     log_trade_open(
+        db=db,
         ticket=result.order,
         symbol=payload.symbol,
         type_=payload.order_type,
@@ -100,7 +108,7 @@ def open_trade(payload: OpenTradeRequest, mt5=Depends(get_mt5_client)):
 
 
 @router.post("/trade/close")
-def close_trade(payload: CloseTradeRequest, mt5=Depends(get_mt5_client)):
+def close_trade(payload: CloseTradeRequest, mt5=Depends(get_mt5_client), db: Session = Depends(get_db)):
     logger.info("Close trade request: ticket=%s", payload.ticket)
     if mt5 is None:
         return {"status": "error", "message": "MT5 not connected"}
@@ -149,6 +157,7 @@ def close_trade(payload: CloseTradeRequest, mt5=Depends(get_mt5_client)):
     profit = sum(d.profit for d in deals) if deals else 0.0
 
     update_trade_close(
+        db=db,
         ticket=payload.ticket,
         close_price=price,
         profit=profit,
@@ -190,9 +199,9 @@ def open_positions(mt5=Depends(get_mt5_client)):
 
 
 @router.get("/trades/history")
-def trade_history():
+def trade_history(db: Session = Depends(get_db)):
     try:
-        trades = get_trades()
+        trades = get_trades(db)
         return {
             "status": "success",
             "data": [

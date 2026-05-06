@@ -1,11 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from app.services.trade_logger import get_trades
+from app.api.dependencies import get_db
 
 router = APIRouter()
 
 @router.get("/journal/trades")
-def journal():
-    trades = get_trades()
+def journal(db: Session = Depends(get_db)):
+    trades = get_trades(db)
 
     return {
         "status": "success",

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from app.core import config
+from app.core.config import config
 from app.core.logging import logger
 from app.services.dependencies import get_mt5_client
 
