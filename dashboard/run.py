@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import datetime
+import requests
 
 from streamlit_autorefresh import st_autorefresh
 from app.services.mt5_service import (
@@ -11,6 +12,8 @@ from app.services.mt5_service import (
     open_trade,
     close_trade,
 )
+
+API_URL = "http://localhost:8000/trades/history"
 
 # Configure dashboard
 st.set_page_config(page_title="Trading Dashboard", layout="wide")
@@ -67,7 +70,7 @@ price = get_symbol_price(symbol)
 if price:
     st.json(price)
 
-# Positions table with close buttons
+# Positions with close buttons
 st.subheader("Open Positions")
 positions = get_open_positions(symbol)
 if positions:
@@ -80,3 +83,25 @@ if positions:
             st.write(result)
 else:
     st.info("No open positions.")
+
+# Trade history table
+st.subheader("Trade History")
+try:
+    resp = requests.get(API_URL)
+    data = resp.json()
+    if data["status"] == "success":
+        trades = data["data"]
+        if trades:
+            df_hist = pd.DataFrame(trades)
+            st.dataframe(df_hist)
+            # Optional: cumulative profit chart
+            df_hist["cumulative_profit"] = df_hist["profit"].cumsum()
+            fig_hist = px.line(df_hist, x="created_at", y="cumulative_profit",
+                               title="Cumulative Profit Over Time")
+            st.plotly_chart(fig_hist, use_container_width=True)
+        else:
+            st.info("No trades logged yet.")
+    else:
+        st.error(f"Error: {data.get('message', 'Unknown error')}")
+except Exception as e:
+    st.error(f"Failed to fetch trades: {e}")

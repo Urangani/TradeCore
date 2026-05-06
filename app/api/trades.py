@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from schemas.trade import OpenTradeRequest, CloseTradeRequest
 from services.mt5_service import get_mt5
 from services.risk_engine import validate_trade
-from services.trade_logger import log_trade_open,update_trade_close
+from services.trade_logger import log_trade_open,update_trade_close,get_trades
 router = APIRouter()
 
 def get_filling_mode(mt5, symbol):
@@ -183,3 +183,28 @@ def open_positions():
             for p in positions
         ],
     }
+
+
+@router.get("/trades/history")
+def trade_history():
+    try:
+        rows = get_trades()
+        # Convert SQLite rows into dicts
+        trades = [
+            {
+                "id": r[0],
+                "ticket": r[1],
+                "symbol": r[2],
+                "type": r[3],
+                "volume": r[4],
+                "open_price": r[5],
+                "close_price": r[6],
+                "profit": r[7],
+                "status": r[8],
+                "created_at": r[9],
+            }
+            for r in rows
+        ]
+        return {"status": "success", "data": trades}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
